@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}发起扫描 — AutoSecOps{% endblock %}
+{% block content %}
+<div class="container">
+
+  <div class="page-header">
+    <h1>🔍 新建扫描任务</h1>
+  </div>
+
+  <form id="scan-form" class="scan-form">
+
+    <!-- Scan Target -->
+    <div class="form-section">
+      <h3>扫描目标</h3>
+      <div class="form-group">
+        <label for="target">目标路径 / 镜像名</label>
+        <input type="text" id="target" name="target" placeholder="例：./your-project 或 your-app:latest" required>
+        <small>支持本地代码目录路径或 Docker 镜像名</small>
+      </div>
+    </div>
+
+    <!-- Scan Type -->
+    <div class="form-section">
+      <h3>扫描类型</h3>
+      <div class="scan-types">
+        <label class="scan-type-card selected">
+          <input type="radio" name="scan_type" value="full" checked>
+          <div class="scan-type-content">
+            <span class="scan-type-icon">🕸️</span>
+            <span class="scan-type-name">全量扫描</span>
+            <span class="scan-type-desc">SAST + 依赖审计 + 密钥扫描 + 容器 + 合规</span>
+          </div>
+        </label>
+        <label class="scan-type-card">
+          <input type="radio" name="scan_type" value="sast">
+          <div class="scan-type-content">
+            <span class="scan-type-icon">🔬</span>
+            <span class="scan-type-name">SAST</span>
+            <span class="scan-type-desc">静态代码安全分析</span>
+          </div>
+        </label>
+        <label class="scan-type-card">
+          <input type="radio" name="scan_type" value="dependency">
+          <div class="scan-type-content">
+            <span class="scan-type-icon">📦</span>
+            <span class="scan-type-name">依赖审计</span>
+            <span class="scan-type-desc">CVE 漏洞扫描</span>
+          </div>
+        </label>
+        <label class="scan-type-card">
+          <input type="radio" name="scan_type" value="secret">
+          <div class="scan-type-content">
+            <span class="scan-type-icon">🔑</span>
+            <span class="scan-type-name">密钥扫描</span>
+            <span class="scan-type-desc">敏感信息泄露检测</span>
+          </div>
+        </label>
+        <label class="scan-type-card">
+          <input type="radio" name="scan_type" value="container">
+          <div class="scan-type-content">
+            <span class="scan-type-icon">📦</span>
+            <span class="scan-type-name">容器安全</span>
+            <span class="scan-type-desc">Docker 镜像漏洞扫描</span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Options (shown for full scan) -->
+    <div class="form-section" id="options-section">
+      <h3>扫描选项</h3>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="fail_on">失败阈值</label>
+          <select id="fail_on" name="fail_on">
+            <option value="critical">Critical</option>
+            <option value="high" selected>High +</option>
+            <option value="medium">Medium +</option>
+            <option value="low">Low +</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="scanner">容器扫描器</label>
+          <select id="scanner" name="scanner">
+            <option value="trivy" selected>Trivy</option>
+            <option value="grype">Grype</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>扫描语言（SAST）</label>
+        <div class="checkbox-group">
+          <label><input type="checkbox" name="languages" value="python" checked> Python</label>
+          <label><input type="checkbox" name="languages" value="go" checked> Go</label>
+          <label><input type="checkbox" name="languages" value="javascript" checked> JavaScript</label>
+          <label><input type="checkbox" name="languages" value="java"> Java</label>
+          <label><input type="checkbox" name="languages" value="nodejs"> Node.js</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="exclude_paths">排除路径</label>
+        <input type="text" id="exclude_paths" name="exclude_paths"
+               placeholder="例：**/test/**,**/node_modules/**（逗号分隔）">
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+        🚀 开始扫描
+      </button>
+      <a href="{{ url_for('index') }}" class="btn btn-secondary">取消</a>
+    </div>
+
+  </form>
+
+  <!-- Progress -->
+  <div id="progress-section" class="hidden">
+    <div class="progress-card">
+      <div class="progress-header">
+        <span id="progress-title">扫描进行中...</span>
+        <span id="progress-scan-id" class="text-muted"></span>
+      </div>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <p class="progress-msg" id="progress-msg">正在初始化...</p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const form = document.getElementById('scan-form');
+const progressSection = document.getElementById('progress-section');
+const submitBtn = document.getElementById('submit-btn');
+
+// Scan type card selection
+document.querySelectorAll('.scan-type-card input').forEach(input => {
+  input.addEventListener('change', () => {
+    document.querySelectorAll('.scan-type-card').forEach(c => c.classList.remove('selected'));
+    input.closest('.scan-type-card').classList.add('selected');
+  });
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const formData = new FormData(form);
+  const languages = [...document.querySelectorAll('input[name="languages"]:checked')].map(el => el.value);
+
+  const payload = {
+    type: formData.get('scan_type'),
+    target: formData.get('target'),
+    fail_on: formData.get('fail_on'),
+    scanner: formData.get('scanner'),
+    languages,
+    exclude_paths: formData.get('exclude_paths') ? formData.get('exclude_paths').split(',').map(s => s.trim()) : [],
+  };
+
+  // Show progress
+  form.classList.add('hidden');
+  progressSection.classList.remove('hidden');
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/scans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert('创建扫描失败: ' + (err.error || res.statusText));
+      form.classList.remove('hidden');
+      progressSection.classList.add('hidden');
+      submitBtn.disabled = false;
+      return;
+    }
+
+    const data = await res.json();
+    document.getElementById('progress-scan-id').textContent = 'Scan ID: ' + data.scan_id;
+
+    // Poll status
+    await pollStatus(data.scan_id);
+
+  } catch (err) {
+    alert('请求失败: ' + err.message);
+    form.classList.remove('hidden');
+    progressSection.classList.add('hidden');
+    submitBtn.disabled = false;
+  }
+});
+
+async function pollStatus(scanId) {
+  const states = ['⏳ pending', '⚙️ running', '✅ completed', '❌ failed', '🚫 cancelled'];
+  let pct = 0;
+  const bar = document.getElementById('progress-bar');
+  const msg = document.getElementById('progress-msg');
+  const title = document.getElementById('progress-title');
+
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+    const res = await fetch('/api/scans/' + scanId);
+    const scan = await res.json();
+
+    title.textContent = scan.status === 'running' ? '扫描进行中...' : '扫描已完成';
+    msg.textContent = new Date(scan.created_at).toLocaleString('zh-CN');
+
+    if (scan.status === 'running') {
+      pct = Math.min(pct + Math.random() * 15, 90);
+    } else if (scan.status === 'completed') {
+      pct = 100;
+      bar.style.width = '100%';
+      msg.textContent = '扫描完成！正在跳转报告...';
+      setTimeout(() => window.location.href = '/report/' + scanId, 1500);
+      break;
+    } else if (scan.status === 'failed' || scan.status === 'cancelled') {
+      msg.textContent = '扫描' + (scan.status === 'cancelled' ? '已取消' : '失败');
+      setTimeout(() => window.location.href = '/report/' + scanId, 2000);
+      break;
+    }
+
+    bar.style.width = pct + '%';
+  }
+}
+</script>
+{% endblock %}

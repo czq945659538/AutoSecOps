@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 — AutoSecOps{% endblock %}
+{% block content %}
+<div class="container">
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon">🔍</div>
+      <div class="stat-info">
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-label">总扫描数</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">✅</div>
+      <div class="stat-info">
+        <div class="stat-value" id="stat-completed">—</div>
+        <div class="stat-label">已完成</div>
+      </div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-icon">⚠️</div>
+      <div class="stat-info">
+        <div class="stat-value" id="stat-issues">—</div>
+        <div class="stat-label">发现风险</div>
+      </div>
+    </div>
+    <div class="stat-card danger">
+      <div class="stat-icon">🚨</div>
+      <div class="stat-info">
+        <div class="stat-value" id="stat-critical">—</div>
+        <div class="stat-label">严重漏洞</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="section">
+    <h2 class="section-title">快速开始</h2>
+    <div class="quick-actions">
+      <a href="{{ url_for('scan_page') }}" class="btn btn-primary btn-lg">
+        🔍 新建扫描
+      </a>
+      <a href="{{ url_for('history_page') }}" class="btn btn-secondary btn-lg">
+        📋 查看历史
+      </a>
+    </div>
+  </div>
+
+  <!-- Recent Scans -->
+  <div class="section">
+    <h2 class="section-title">最近扫描</h2>
+    <div class="table-wrapper">
+      <table class="table" id="recent-scans-table">
+        <thead>
+          <tr>
+            <th>扫描ID</th>
+            <th>类型</th>
+            <th>目标</th>
+            <th>状态</th>
+            <th>时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="recent-scans-body">
+          <tr><td colspan="6" class="text-center text-muted">暂无扫描记录</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Module Status -->
+  <div class="section">
+    <h2 class="section-title">扫描模块状态</h2>
+    <div class="modules-grid">
+      <div class="module-card">
+        <div class="module-icon">🔬</div>
+        <div class="module-name">SAST</div>
+        <div class="module-desc">静态代码安全分析</div>
+        <span class="badge badge-success">就绪</span>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">📦</div>
+        <div class="module-name">依赖审计</div>
+        <div class="module-desc">CVE 漏洞扫描</div>
+        <span class="badge badge-success">就绪</span>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">🔑</div>
+        <div class="module-name">密钥扫描</div>
+        <div class="module-desc">敏感信息泄露检测</div>
+        <span class="badge badge-success">就绪</span>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">📦</div>
+        <div class="module-name">容器安全</div>
+        <div class="module-desc">镜像漏洞扫描</div>
+        <span class="badge badge-success">就绪</span>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">✅</div>
+        <div class="module-name">合规检查</div>
+        <div class="module-desc">CIS 基线检测</div>
+        <span class="badge badge-success">就绪</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadDashboard() {
+  const res = await fetch('/api/scans');
+  const scans = await res.json();
+  const total = scans.length;
+  const completed = scans.filter(s => s.status === 'completed').length;
+  const allSummary = scans.filter(s => s.summary).flatMap(s => [
+    ...(s.summary.sast?.critical || 0) > 0 ? [s.summary.sast.critical] : [],
+    ...(s.summary.dep?.critical || 0) > 0 ? [s.summary.dep.critical] : [],
+  ]);
+  const critical = allSummary.reduce((a, b) => a + b, 0);
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-completed').textContent = completed;
+  document.getElementById('stat-issues').textContent = total > 0 ? '—' : 0;
+  document.getElementById('stat-critical').textContent = critical;
+
+  const tbody = document.getElementById('recent-scans-body');
+  if (scans.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无扫描记录</td></tr>';
+  } else {
+    tbody.innerHTML = scans.slice(-5).reverse().map(scan => `
+      <tr>
+        <td><code>${scan.id}</code></td>
+        <td>${scan.type}</td>
+        <td class="target-cell" title="${scan.target}">${scan.target}</td>
+        <td><span class="badge badge-${statusClass(scan.status)}">${scan.status}</span></td>
+        <td>${new Date(scan.created_at).toLocaleString('zh-CN')}</td>
+        <td>
+          ${scan.status === 'completed'
+            ? `<a href="/report/${scan.id}" class="btn btn-sm btn-primary">查看报告</a>`
+            : `<a href="/report/${scan.id}" class="btn btn-sm btn-secondary">详情</a>`}
+        </td>
+      </tr>
+    `).join('');
+  }
+}
+
+function statusClass(s) {
+  return { pending: 'warning', running: 'info', completed: 'success', failed: 'danger', cancelled: 'secondary' }[s] || 'secondary';
+}
+
+loadDashboard();
+setInterval(loadDashboard, 10000);
+</script>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}扫描报告 — AutoSecOps{% endblock %}
+{% block content %}
+<div class="container">
+
+  <div class="page-header">
+    <div>
+      <h1>📊 扫描报告</h1>
+      <p class="text-muted" id="report-meta"></p>
+    </div>
+    <div class="report-actions">
+      <button class="btn btn-secondary" onclick="downloadReport()">📥 下载报告</button>
+      <a href="{{ url_for('history_page') }}" class="btn btn-secondary">← 返回历史</a>
+      <a href="{{ url_for('index') }}" class="btn btn-primary">🏠 仪表盘</a>
+    </div>
+  </div>
+
+  <!-- Scan Info Card -->
+  <div class="report-card info-card">
+    <div class="info-grid">
+      <div><strong>扫描ID</strong><span id="scan-id">—</span></div>
+      <div><strong>类型</strong><span id="scan-type">—</span></div>
+      <div><strong>目标</strong><span id="scan-target">—</span></div>
+      <div><strong>状态</strong><span id="scan-status" class="badge">—</span></div>
+      <div><strong>开始时间</strong><span id="scan-created">—</span></div>
+      <div><strong>完成时间</strong><span id="scan-finished">—</span></div>
+    </div>
+  </div>
+
+  <!-- Summary Cards (loaded after fetch) -->
+  <div id="summary-section" class="hidden">
+    <div class="stats-row" id="summary-stats"></div>
+
+    <!-- SAST Results -->
+    <div class="report-section" id="sast-section" class="hidden">
+      <h2 class="section-title">🔬 SAST 静态分析</h2>
+      <div id="sast-results"></div>
+    </div>
+
+    <!-- Dependency Results -->
+    <div class="report-section" id="dep-section" class="hidden">
+      <h2 class="section-title">📦 依赖审计</h2>
+      <div id="dep-results"></div>
+    </div>
+
+    <!-- Secret Results -->
+    <div class="report-section" id="secret-section" class="hidden">
+      <h2 class="section-title">🔑 密钥扫描</h2>
+      <div id="secret-results"></div>
+    </div>
+
+    <!-- Container Results -->
+    <div class="report-section" id="container-section" class="hidden">
+      <h2 class="section-title">📦 容器安全</h2>
+      <div id="container-results"></div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="text-center">
+    <div class="spinner"></div>
+    <p>正在加载报告...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="error-section" class="hidden">
+    <div class="alert alert-danger">
+      <p id="error-msg"></p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const scanId = window.location.pathname.split('/').pop();
+
+async function loadReport() {
+  try {
+    const res = await fetch('/api/scans/' + scanId);
+    if (!res.ok) throw new Error(await res.text());
+    const scan = await res.json();
+
+    // Fill info card
+    document.getElementById('scan-id').textContent = scan.id;
+    document.getElementById('scan-type').textContent = scan.type;
+    document.getElementById('scan-target').textContent = scan.target;
+    document.getElementById('scan-created').textContent = new Date(scan.created_at).toLocaleString('zh-CN');
+    document.getElementById('scan-finished').textContent = scan.finished_at
+      ? new Date(scan.finished_at).toLocaleString('zh-CN') : '—';
+
+    const statusBadge = document.getElementById('scan-status');
+    statusBadge.textContent = scan.status;
+    statusBadge.className = 'badge badge-' + statusClass(scan.status);
+
+    document.getElementById('report-meta').textContent = `生成时间: ${new Date().toLocaleString('zh-CN')}`;
+
+    if (scan.status !== 'completed') {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error-section').classList.remove('hidden');
+      document.getElementById('error-msg').textContent = '扫描尚未完成，当前状态: ' + scan.status;
+      return;
+    }
+
+    const summary = scan.summary || {};
+    renderSummary(summary);
+
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('summary-section').classList.remove('hidden');
+
+  } catch (err) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('error-section').classList.remove('hidden');
+    document.getElementById('error-msg').textContent = err.message;
+  }
+}
+
+function renderSummary(s) {
+  const container = document.getElementById('summary-stats');
+  const items = [
+    { label: 'SAST 问题', icon: '🔬', total: s.sast?.total, critical: s.sast?.critical, high: s.sast?.high },
+    { label: '依赖漏洞', icon: '📦', total: s.dep?.total, critical: s.dep?.critical },
+    { label: '密钥泄露', icon: '🔑', total: s.secret?.total },
+    { label: '容器风险', icon: '📦', total: s.container?.total, critical: s.container?.critical },
+  ];
+
+  container.innerHTML = items.map(item => `
+    <div class="stat-card ${item.critical > 0 ? 'danger' : item.total > 0 ? 'warning' : ''}">
+      <div class="stat-icon">${item.icon}</div>
+      <div class="stat-info">
+        <div class="stat-value">${item.total ?? '—'}</div>
+        <div class="stat-label">${item.label}</div>
+        ${item.critical > 0 ? `<div class="stat-sub">⚠️ Critical: ${item.critical}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function statusClass(s) {
+  return { pending: 'warning', running: 'info', completed: 'success', failed: 'danger', cancelled: 'secondary' }[s] || 'secondary';
+}
+
+async function downloadReport() {
+  window.location.href = '/api/scans/' + scanId + '/report/download';
+}
+
+loadReport();
+</script>
+{% endblock %}

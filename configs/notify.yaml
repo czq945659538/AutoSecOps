@@ -1,0 +1,16 @@
+# Notification Channels Configuration
+
+notify:
+  dingtalk:
+    webhook: ${DINGTALK_WEBHOOK}
+    secret: ${DINGTALK_SECRET}
+
+  feishu:
+    webhook: ${FEISHU_WEBHOOK}
+
+  email:
+    smtp_host: ${SMTP_HOST}
+    smtp_port: 465
+    from: ${EMAIL_FROM}
+    to:
+      - ${EMAIL_TO}

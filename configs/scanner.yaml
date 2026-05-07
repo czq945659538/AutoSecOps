@@ -1,0 +1,34 @@
+# AutoSecOps Scanner Configuration
+# https://github.com/czq945659538/AutoSecOps
+
+scanner:
+  sast:
+    enabled: true
+    languages:
+      - python
+      - go
+      - javascript
+    rulesets:
+      - autoops-security/python-security
+      - autoops-security/go-security
+    severity_threshold: medium
+
+  dependency:
+    enabled: true
+    sources:
+      - osv
+      - github_advisory
+    fail_on: critical
+
+  secret:
+    enabled: true
+    detectors:
+      - aws_access_key
+      - github_token
+      - private_key
+      - api_key
+
+  container:
+    enabled: true
+    scanner: trivy
+    severity_threshold: high

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}错误 — AutoSecOps{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="error-page">
+    <div class="error-code">{{ code or '404' }}</div>
+    <div class="error-msg">{{ message or '页面未找到' }}</div>
+    <a href="{{ url_for('index') }}" class="btn btn-primary">← 返回仪表盘</a>
+  </div>
+</div>
+{% endblock %}

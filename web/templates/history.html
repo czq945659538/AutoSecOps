@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}扫描历史 — AutoSecOps{% endblock %}
+{% block content %}
+<div class="container">
+
+  <div class="page-header">
+    <h1>📋 扫描历史</h1>
+    <a href="{{ url_for('scan_page') }}" class="btn btn-primary">+ 新建扫描</a>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <select id="filter-status" onchange="renderHistory()">
+      <option value="">全部状态</option>
+      <option value="pending">Pending</option>
+      <option value="running">Running</option>
+      <option value="completed">Completed</option>
+      <option value="failed">Failed</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+    <select id="filter-type" onchange="renderHistory()">
+      <option value="">全部类型</option>
+      <option value="full">全量扫描</option>
+      <option value="sast">SAST</option>
+      <option value="dependency">依赖审计</option>
+      <option value="secret">密钥扫描</option>
+      <option value="container">容器安全</option>
+    </select>
+    <span id="total-count" class="text-muted"></span>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrapper">
+    <table class="table" id="history-table">
+      <thead>
+        <tr>
+          <th>扫描ID</th>
+          <th>类型</th>
+          <th>目标</th>
+          <th>状态</th>
+          <th>完成时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="history-body">
+        <tr><td colspan="6" class="text-center text-muted">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let allScans = [];
+
+async function loadHistory() {
+  const res = await fetch('/api/scans');
+  allScans = await res.json();
+  renderHistory();
+}
+
+function renderHistory() {
+  const statusFilter = document.getElementById('filter-status').value;
+  const typeFilter = document.getElementById('filter-type').value;
+
+  const filtered = allScans.filter(s =>
+    (!statusFilter || s.status === statusFilter) &&
+    (!typeFilter || s.type === typeFilter)
+  ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  document.getElementById('total-count').textContent = `共 ${filtered.length} 条记录`;
+
+  const tbody = document.getElementById('history-body');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(scan => {
+    const canCancel = scan.status === 'pending' || scan.status === 'running';
+    const canReport = scan.status === 'completed';
+    return `
+      <tr>
+        <td><code>${scan.id}</code></td>
+        <td><span class="badge badge-secondary">${scan.type}</span></td>
+        <td class="target-cell" title="${scan.target}">${scan.target}</td>
+        <td><span class="badge badge-${statusClass(scan.status)}">${scan.status}</span></td>
+        <td>${scan.finished_at ? new Date(scan.finished_at).toLocaleString('zh-CN') : '—'}</td>
+        <td class="actions">
+          ${canReport
+            ? `<a href="/report/${scan.id}" class="btn btn-sm btn-primary">报告</a>`
+            : `<a href="/report/${scan.id}" class="btn btn-sm btn-secondary">详情</a>`}
+          ${canCancel
+            ? `<button class="btn btn-sm btn-danger" onclick="cancelScan('${scan.id}')">取消</button>`
+            : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function statusClass(s) {
+  return { pending: 'warning', running: 'info', completed: 'success', failed: 'danger', cancelled: 'secondary' }[s] || 'secondary';
+}
+
+async function cancelScan(scanId) {
+  if (!confirm('确定要取消该扫描任务吗？')) return;
+  await fetch('/api/scans/' + scanId + '/cancel', { method: 'POST' });
+  loadHistory();
+}
+
+loadHistory();
+</script>
+{% endblock %}
