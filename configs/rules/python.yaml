@@ -1,0 +1,50 @@
+# AutoSecOps — Python SAST Rules (YAML extension)
+# These rules are merged with built-in Python rules in autoops/scanner/sast.py
+
+rules:
+  - id: PY009
+    severity: critical
+    cwe: CWE-89
+    title: SQL Injection via string formatting
+    pattern: '(execute|cursor\.execute)\s*\([^)]*\%s[^)]*\)'
+    message: |
+      SQL query constructed using string formatting is vulnerable to SQL injection.
+      Use parameterized queries: cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+    reference: https://owasp.org/www-community/attacks/SQL_Injection
+
+  - id: PY010
+    severity: critical
+    cwe: CWE-78
+    title: Shell command injection via subprocess
+    pattern: 'subprocess\.call\s*\([^)]*shell\s*=\s*True'
+    message: |
+      subprocess.call with shell=True allows shell injection attacks.
+      Use shell=False with a list of arguments instead.
+    reference: https://owasp.org/www-community/attacks/Command_Injection
+
+  - id: PY011
+    severity: high
+    cwe: CWE-502
+    title: Unsafe YAML load
+    pattern: 'yaml\.load\s*\([^)]*(?!Loader\s*=)'
+    message: |
+      yaml.load() without a safe Loader can execute arbitrary Python objects.
+      Use yaml.safe_load() or yaml.load(data, Loader=yaml.SafeLoader).
+    reference: https://msg.org/
+
+  - id: PY012
+    severity: high
+    cwe: CWE-798
+    title: Hardcoded database password
+    pattern: '(password|passwd)\s*=\s*["'][^"']{4,}["']'
+    message: |
+      Hardcoded database password detected. Use environment variables or a secrets manager.
+    reference: https://owasp.org/www-series/OWASP-API-Security-Top-10-2019-released/
+
+  - id: PY013
+    severity: medium
+    cwe: CWE-200
+    title: Print of sensitive variable
+    pattern: 'print\s*\([^)]*(password|token|secret|key)\s*\)'
+    message: Sensitive data should not be printed to stdout.
+    reference: https://cwe.mitre.org/data/definitions/200.html

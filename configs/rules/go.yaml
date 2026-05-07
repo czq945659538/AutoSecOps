@@ -1,0 +1,40 @@
+# AutoSecOps — Go SAST Rules (YAML extension)
+
+rules:
+  - id: GO007
+    severity: critical
+    cwe: CWE-78
+    title: OS command injection
+    pattern: 'exec\.Command\("sh", "-c",'
+    message: |
+      exec.Command with "sh -c" allows command injection.
+      Pass arguments as separate parameters instead.
+    reference: https://owasp.org/www-community/attacks/Command_Injection
+
+  - id: GO008
+    severity: critical
+    cwe: CWE-295
+    title: Insecure TLS configuration
+    pattern: 'InsecureSkipVerify\s*:\s*true'
+    message: |
+      TLS certificate verification is disabled. This allows man-in-the-middle attacks.
+      Remove InsecureSkipVerify or configure proper certificate verification.
+    reference: https://cwe.mitre.org/data/definitions/295.html
+
+  - id: GO009
+    severity: high
+    cwe: CWE-798
+    title: Hardcoded credential in Go code
+    pattern: '(password|passwd|secret)\s*:\s*"[^"]{6,}"'
+    message: |
+      Hardcoded credential detected. Use environment variables via os.Getenv.
+    reference: https://owasp.org/www-series/OWASP-API-Security-Top-10-2019-released/
+
+  - id: GO010
+    severity: medium
+    cwe: CWE-312
+    title: Cleartext HTTP request
+    pattern: 'http\.(Get|Post|Do)\("http://'
+    message: |
+      Cleartext HTTP request detected. Use HTTPS URLs to prevent eavesdropping.
+    reference: https://cwe.mitre.org/data/definitions/312.html
